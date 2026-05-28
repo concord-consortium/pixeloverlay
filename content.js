@@ -5,21 +5,73 @@
   const DEFAULT_OPACITY = 0.5;
   const MIN_WIDTH = 20;
   const SAVE_DEBOUNCE_MS = 300;
+  const LINE_HIT = 9;
+  const LINE_HIT_OFFSET = Math.floor(LINE_HIT / 2);
+  const UNDO_MAX = 50;
 
   let overlay = null;
   let active = false;
   let currentDataUrl = null;
   let saveTimer = null;
 
+  let lines = [];
+  let linesHidden = false;
+  let lineIdSeq = 0;
+  let lineUndoStack = [];
+  let lineRedoStack = [];
+  const lineEls = new Map();
+
   function pageKey() {
     return 'overlay:' + location.origin + location.pathname;
+  }
+
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, SAVE_DEBOUNCE_MS);
+  }
+
+  function doSave() {
+    if (!active) return;
+    const data = {};
+    if (overlay && currentDataUrl) {
+      const img = overlay.querySelector('.pixeloverlay-image');
+      data.dataUrl = currentDataUrl;
+      data.left = parseFloat(overlay.style.left) || 0;
+      data.top = parseFloat(overlay.style.top) || 0;
+      data.width = parseFloat(overlay.style.width) || 0;
+      data.opacity = img ? parseFloat(img.style.opacity) || DEFAULT_OPACITY : DEFAULT_OPACITY;
+      data.locked = overlay.classList.contains('pixeloverlay-locked');
+      data.hidden = overlay.classList.contains('pixeloverlay-hidden');
+    }
+    if (lines.length > 0 || linesHidden) {
+      data.lines = lines.map((l) => ({
+        orientation: l.orientation,
+        position: l.position,
+        color: l.color,
+        style: l.style,
+      }));
+      data.linesHidden = linesHidden;
+    }
+    if (Object.keys(data).length === 0) {
+      chrome.storage.local.remove(pageKey());
+    } else {
+      chrome.storage.local.set({ [pageKey()]: data });
+    }
   }
 
   function restoreFromStorage() {
     chrome.storage.local.get([pageKey()], (data) => {
       const state = data[pageKey()];
-      if (state && state.dataUrl) {
+      if (!state) return;
+      if (state.dataUrl && !overlay) {
         createOverlay(state.dataUrl, state);
+      }
+      if (Array.isArray(state.lines) && state.lines.length > 0 && lines.length === 0) {
+        linesHidden = !!state.linesHidden;
+        document.documentElement.classList.toggle('pixeloverlay-lines-hidden', linesHidden);
+        state.lines.forEach((l) => {
+          addLineSilent(l.orientation, l.color, l.style, l.position, { focus: false });
+        });
       }
     });
   }
@@ -35,7 +87,8 @@
       active = !!msg.active;
       if (!active) {
         removeOverlay({ clearStorage: false });
-      } else if (!wasActive && !overlay) {
+        clearLinesFromDom();
+      } else if (!wasActive) {
         restoreFromStorage();
       }
       sendResponse({ ok: true });
@@ -44,6 +97,21 @@
       sendResponse({ ok: true });
     } else if (msg.type === 'clearOverlay') {
       removeOverlay({ clearStorage: true });
+      sendResponse({ ok: true });
+    } else if (msg.type === 'addLine') {
+      addLine(msg.orientation, msg.color || '#ff0000', msg.style || 'dashed');
+      sendResponse({ ok: true });
+    } else if (msg.type === 'removeAllLines') {
+      removeAllLines();
+      sendResponse({ ok: true });
+    } else if (msg.type === 'toggleLinesHidden') {
+      toggleLinesHidden();
+      sendResponse({ ok: true, hidden: linesHidden });
+    } else if (msg.type === 'undoLine') {
+      undoLine();
+      sendResponse({ ok: true });
+    } else if (msg.type === 'redoLine') {
+      redoLine();
       sendResponse({ ok: true });
     } else if (msg.type === 'ping') {
       sendResponse({ ok: true });
@@ -71,6 +139,195 @@
     },
     true,
   );
+
+  // ========== Alignment lines ==========
+
+  function snapshotLines() {
+    return lines.map((l) => ({
+      orientation: l.orientation,
+      position: l.position,
+      color: l.color,
+      style: l.style,
+    }));
+  }
+
+  function pushUndo() {
+    lineUndoStack.push(snapshotLines());
+    if (lineUndoStack.length > UNDO_MAX) lineUndoStack.shift();
+    lineRedoStack = [];
+  }
+
+  function restoreSnapshot(snapshot) {
+    clearLinesFromDom();
+    snapshot.forEach((l) => {
+      addLineSilent(l.orientation, l.color, l.style, l.position, { focus: false });
+    });
+  }
+
+  function undoLine() {
+    if (lineUndoStack.length === 0) return;
+    lineRedoStack.push(snapshotLines());
+    restoreSnapshot(lineUndoStack.pop());
+    scheduleSave();
+  }
+
+  function redoLine() {
+    if (lineRedoStack.length === 0) return;
+    lineUndoStack.push(snapshotLines());
+    restoreSnapshot(lineRedoStack.pop());
+    scheduleSave();
+  }
+
+  function addLine(orientation, color, style) {
+    pushUndo();
+    addLineSilent(orientation, color, style, null, { focus: true });
+    scheduleSave();
+  }
+
+  function addLineSilent(orientation, color, style, position, opts) {
+    const id = 'line-' + ++lineIdSeq;
+    if (position == null || !Number.isFinite(position)) {
+      position = orientation === 'vertical'
+        ? Math.round(window.innerWidth / 2)
+        : Math.round(window.innerHeight / 2);
+    }
+    const line = {
+      id,
+      orientation,
+      position,
+      color: color || '#ff0000',
+      style: style || 'dashed',
+    };
+    lines.push(line);
+    createLineElement(line, opts && opts.focus);
+  }
+
+  function createLineElement(line, focus) {
+    const el = document.createElement('div');
+    el.className = 'pixeloverlay-line pixeloverlay-line-' + line.orientation;
+    el.tabIndex = -1;
+    el.dataset.id = line.id;
+    el.style.setProperty('--line-color', line.color);
+    el.style.setProperty('--line-style', line.style);
+    el.setAttribute('aria-label', line.orientation + ' alignment line');
+    applyLinePosition(el, line);
+    setupLineDrag(el, line);
+    setupLineKeyboard(el, line);
+    document.documentElement.appendChild(el);
+    lineEls.set(line.id, el);
+    if (focus) el.focus({ preventScroll: true });
+  }
+
+  function applyLinePosition(el, line) {
+    if (line.orientation === 'vertical') {
+      el.style.left = line.position - LINE_HIT_OFFSET + 'px';
+    } else {
+      el.style.top = line.position - LINE_HIT_OFFSET + 'px';
+    }
+  }
+
+  function removeAllLines() {
+    if (lines.length === 0) return;
+    pushUndo();
+    clearLinesFromDom();
+    scheduleSave();
+  }
+
+  function clearLinesFromDom() {
+    lineEls.forEach((el) => {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    });
+    lineEls.clear();
+    lines = [];
+  }
+
+  function setLinesHidden(hidden) {
+    linesHidden = hidden;
+    document.documentElement.classList.toggle('pixeloverlay-lines-hidden', hidden);
+    scheduleSave();
+  }
+
+  function toggleLinesHidden() {
+    setLinesHidden(!linesHidden);
+  }
+
+  function setupLineDrag(el, line) {
+    let dragging = false;
+    let startCoord = 0;
+    let startPos = 0;
+
+    function point(e) {
+      const isV = line.orientation === 'vertical';
+      if (e.touches && e.touches[0]) {
+        return isV ? e.touches[0].clientX : e.touches[0].clientY;
+      }
+      return isV ? e.clientX : e.clientY;
+    }
+
+    function onDown(e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      el.focus({ preventScroll: true });
+      dragging = true;
+      startCoord = point(e);
+      startPos = line.position;
+      document.addEventListener('mousemove', onMove, true);
+      document.addEventListener('mouseup', onUp, true);
+      document.addEventListener('touchmove', onMove, { capture: true, passive: false });
+      document.addEventListener('touchend', onUp, true);
+    }
+
+    function onMove(e) {
+      if (!dragging) return;
+      e.preventDefault();
+      const delta = point(e) - startCoord;
+      line.position = Math.round(startPos + delta);
+      applyLinePosition(el, line);
+      scheduleSave();
+    }
+
+    function onUp() {
+      dragging = false;
+      document.removeEventListener('mousemove', onMove, true);
+      document.removeEventListener('mouseup', onUp, true);
+      document.removeEventListener('touchmove', onMove, { capture: true });
+      document.removeEventListener('touchend', onUp, true);
+    }
+
+    el.addEventListener('mousedown', onDown);
+    el.addEventListener('touchstart', onDown, { passive: false });
+  }
+
+  function setupLineKeyboard(el, line) {
+    el.addEventListener('keydown', (e) => {
+      let delta = 0;
+      if (line.orientation === 'vertical') {
+        if (e.key === 'ArrowLeft') delta = -1;
+        else if (e.key === 'ArrowRight') delta = 1;
+      } else if (e.key === 'ArrowUp') {
+        delta = -1;
+      } else if (e.key === 'ArrowDown') {
+        delta = 1;
+      }
+      if (delta !== 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        const step = e.shiftKey ? 10 : 1;
+        line.position += delta * step;
+        applyLinePosition(el, line);
+        scheduleSave();
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        el.blur();
+      }
+    });
+  }
+
+  // ========== Overlay ==========
 
   const ICON_HIDE =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
@@ -205,25 +462,6 @@
       const w = Math.round(parseFloat(wrapper.style.width) || 0);
       const h = Math.round(parseFloat(wrapper.style.height) || 0);
       readout.textContent = `x: ${left}, y: ${top}\nw: ${w} × h: ${h}`;
-    }
-
-    function scheduleSave() {
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(doSave, SAVE_DEBOUNCE_MS);
-    }
-
-    function doSave() {
-      if (!overlay) return;
-      const data = {
-        dataUrl: currentDataUrl,
-        left: parseFloat(wrapper.style.left) || 0,
-        top: parseFloat(wrapper.style.top) || 0,
-        width: parseFloat(wrapper.style.width) || 0,
-        opacity: parseFloat(img.style.opacity) || DEFAULT_OPACITY,
-        locked: wrapper.classList.contains('pixeloverlay-locked'),
-        hidden: wrapper.classList.contains('pixeloverlay-hidden'),
-      };
-      chrome.storage.local.set({ [pageKey()]: data });
     }
 
     function onChange() {
@@ -456,9 +694,6 @@
     }
     overlay = null;
     currentDataUrl = null;
-    clearTimeout(saveTimer);
-    if (clearStorage) {
-      chrome.storage.local.remove(pageKey());
-    }
+    if (clearStorage) scheduleSave();
   }
 })();

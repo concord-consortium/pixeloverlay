@@ -108,3 +108,72 @@ clearBtn.addEventListener('click', async () => {
     showError('Cannot run on this page.');
   }
 });
+
+const lineColorInput = document.getElementById('lineColor');
+const lineStyleInput = document.getElementById('lineStyle');
+const addVerticalBtn = document.getElementById('addVertical');
+const addHorizontalBtn = document.getElementById('addHorizontal');
+const hideLinesBtn = document.getElementById('hideLines');
+const removeAllLinesBtn = document.getElementById('removeAllLines');
+const undoLinesBtn = document.getElementById('undoLines');
+const redoLinesBtn = document.getElementById('redoLines');
+
+chrome.storage.local.get(['lineColor', 'lineStyle'], ({ lineColor, lineStyle }) => {
+  if (lineColor) lineColorInput.value = lineColor;
+  if (lineStyle) lineStyleInput.value = lineStyle;
+});
+
+lineColorInput.addEventListener('input', () => {
+  chrome.storage.local.set({ lineColor: lineColorInput.value });
+});
+lineStyleInput.addEventListener('change', () => {
+  chrome.storage.local.set({ lineStyle: lineStyleInput.value });
+});
+
+async function sendLineAction(payload) {
+  clearError();
+  const tab = await getActiveTab();
+  if (!tab) return;
+  try {
+    await chrome.storage.local.set({ active: true });
+    render(true);
+    await sendToContent(tab.id, { type: 'setActive', active: true });
+    await sendToContent(tab.id, payload);
+  } catch (err) {
+    showError('Cannot run on this page.');
+  }
+}
+
+addVerticalBtn.addEventListener('click', () => {
+  sendLineAction({
+    type: 'addLine',
+    orientation: 'vertical',
+    color: lineColorInput.value,
+    style: lineStyleInput.value,
+  });
+});
+
+addHorizontalBtn.addEventListener('click', () => {
+  sendLineAction({
+    type: 'addLine',
+    orientation: 'horizontal',
+    color: lineColorInput.value,
+    style: lineStyleInput.value,
+  });
+});
+
+hideLinesBtn.addEventListener('click', () => {
+  sendLineAction({ type: 'toggleLinesHidden' });
+});
+
+removeAllLinesBtn.addEventListener('click', () => {
+  sendLineAction({ type: 'removeAllLines' });
+});
+
+undoLinesBtn.addEventListener('click', () => {
+  sendLineAction({ type: 'undoLine' });
+});
+
+redoLinesBtn.addEventListener('click', () => {
+  sendLineAction({ type: 'redoLine' });
+});

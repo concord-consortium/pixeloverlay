@@ -18,6 +18,8 @@ what's actually rendered in the browser.
   reloads (keyed by origin + pathname)
 - Full keyboard control: nudge, scale, toggle hide/lock, and close
 - One-click clear
+- **Alignment lines** — add movable vertical or horizontal guide lines with configurable color
+  and style; drag with mouse or nudge with arrow keys; undo/redo; hide-all and remove-all
 
 ## Install (unpacked)
 
@@ -65,13 +67,39 @@ it. While it has focus:
 
 Click the overlay to give it focus if a page element has taken focus from it.
 
+## Alignment lines
+
+In the popup, the **Alignment lines** section lets you drop thin movable guide lines onto the page
+for checking horizontal/vertical alignment.
+
+- **Color** + **Style** pickers (default red dashed) — apply to *newly added* lines; existing
+  lines keep their style. The chosen color/style is remembered across popup sessions.
+- **+ Vertical** / **+ Horizontal** — adds a line at viewport center; the new line is auto-focused
+  so arrow keys immediately move it.
+- **Hide all** — toggle line visibility without removing them.
+- **Remove all** — clears every line (undoable).
+- **Undo** / **Redo** — covers add and remove-all operations (in-memory only; cleared on page
+  reload). Position changes are *not* tracked by undo.
+
+Per-line interaction:
+
+- Drag the line with the mouse to move it (vertical lines move horizontally; horizontal lines
+  move vertically).
+- Click a line to focus it (the hit area shows a faint yellow tint), then:
+  - <kbd>←</kbd>/<kbd>→</kbd> (vertical) or <kbd>↑</kbd>/<kbd>↓</kbd> (horizontal) — nudge 1px
+  - <kbd>Shift</kbd> + arrow — nudge 10px
+  - <kbd>Esc</kbd> — blur the line
+
+Lines also persist per URL alongside the overlay state.
+
 ## Persistence
 
-When you paste, drag, scale, or toggle, the current state (image + position + scale + opacity +
-toggles) is debounced-saved to `chrome.storage.local` under
-`overlay:<origin><pathname>`. On page load (or when you turn the extension back on) the overlay is
-restored from that record. Closing via the **×** button or <kbd>Esc</kbd> clears the record;
-toggling the extension off does *not* (so you can flip it back on without re-pasting).
+When you paste, drag, scale, toggle, or edit lines, the current state (image + position + scale +
+opacity + toggles + lines) is debounced-saved to `chrome.storage.local` under
+`overlay:<origin><pathname>`. On page load (or when you turn the extension back on) both the
+overlay and any lines are restored from that record. Closing the overlay via **×** or <kbd>Esc</kbd>
+clears the overlay portion (lines remain); **Remove all** clears just the lines. Toggling the
+extension off does *not* clear storage (so you can flip it back on without re-doing setup).
 
 Note: the image is stored as a data URL. `chrome.storage.local` has a quota (~10MB total), so very
 large pasted images on many different URLs could eventually hit the limit.
