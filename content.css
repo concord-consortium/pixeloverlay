@@ -1,0 +1,125 @@
+.pixeloverlay-wrapper {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  z-index: 2147483647 !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 1px dashed rgba(37, 99, 235, 0.8) !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  pointer-events: auto !important;
+  outline: none !important;
+}
+
+.pixeloverlay-image {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  cursor: move !important;
+  user-select: none !important;
+  -webkit-user-drag: none !important;
+  pointer-events: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  opacity: 0.5;
+}
+
+.pixeloverlay-handle {
+  position: absolute !important;
+  right: -8px !important;
+  bottom: -8px !important;
+  width: 16px !important;
+  height: 16px !important;
+  background: #2563eb !important;
+  border: 1px solid white !important;
+  border-radius: 2px !important;
+  cursor: nwse-resize !important;
+  box-sizing: border-box !important;
+  z-index: 2 !important;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.6) !important;
+}
+
+.pixeloverlay-controls {
+  position: absolute !important;
+  top: 0 !important;
+  left: 100% !important;
+  margin-left: 16px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 6px !important;
+  padding: 6px !important;
+  background: rgba(30, 30, 30, 0.85) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4) !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 11px !important;
+  color: #fff !important;
+  z-index: 3 !important;
+  pointer-events: auto !important;
+}
+
+.pixeloverlay-controls-top {
+  display: flex !important;
+  justify-content: flex-end !important;
+}
+
+.pixeloverlay-controls-sliders {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 10px !important;
+}
+
+.pixeloverlay-slider-col {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.pixeloverlay-close {
+  all: unset !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 20px !important;
+  height: 20px !important;
+  background: #2563eb !important;
+  color: #fff !important;
+  border-radius: 50% !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+}
+
+.pixeloverlay-close:hover {
+  background: #1d4ed8 !important;
+}
+
+.pixeloverlay-slider {
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 18px !important;
+  height: 140px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+  accent-color: #2563eb;
+}
+
+.pixeloverlay-slider-label {
+  font-variant-numeric: tabular-nums;
+  min-width: 28px !important;
+  text-align: center !important;
+  user-select: none !important;
+}

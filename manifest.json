@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "PixelOverlay",
+  "version": "1.0.0",
+  "description": "Paste a clipboard image as a translucent, movable, scalable overlay for pixel-perfect design comparison.",
+  "permissions": ["activeTab", "storage", "clipboardRead", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PixelOverlay",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>PixelOverlay</h1>
+
+    <div class="row">
+      <span class="label">Status</span>
+      <span id="status" class="status off">Off</span>
+      <button id="toggle" class="primary">Turn On</button>
+    </div>
+
+    <div class="row">
+      <button id="paste">Paste image now</button>
+      <button id="clear">Clear overlay</button>
+    </div>
+
+    <p class="hint">
+      When active, press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd> on a page to drop a clipboard
+      image as a 50%-opacity overlay. Drag the image to move it. Drag the blue corner handle to
+      scale (aspect ratio preserved). The side panel has sliders for opacity (0&ndash;100%) and
+      scale (0&ndash;2&times;).
+    </p>
+
+    <p class="hint"><strong>Keyboard</strong> (overlay focused):</p>
+    <ul class="hint kbd-list">
+      <li><kbd>Esc</kbd> &mdash; close overlay</li>
+      <li><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> &mdash; nudge 1px (<kbd>Shift</kbd> = 10px)</li>
+      <li><kbd>Ctrl</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> &mdash; scale &plusmn;1% (<kbd>Shift</kbd> = 10%)</li>
+    </ul>
+
+    <p id="error" class="error" hidden></p>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
