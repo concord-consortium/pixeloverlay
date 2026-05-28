@@ -20,14 +20,21 @@
 
     <p class="hint">
       When active, press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd> on a page to drop a clipboard
-      image as a 50%-opacity overlay. Drag the image to move it. Drag the blue corner handle to
-      scale (aspect ratio preserved). The side panel has sliders for opacity (0&ndash;100%) and
-      scale (0&ndash;2&times;).
+      image as a 50%-opacity overlay. Drag to move, drag the blue corner to scale (aspect ratio
+      preserved). Sliders on the side panel control opacity (0&ndash;100%) and scale
+      (0&ndash;2&times;); x/y/w/h are shown below them. State persists per URL across reloads.
     </p>
+
+    <p class="hint"><strong>Toggle buttons</strong>:</p>
+    <ul class="hint kbd-list">
+      <li><strong>H</strong> &mdash; hide / show without losing position</li>
+      <li><strong>L</strong> &mdash; lock position (clicks pass to page below)</li>
+    </ul>
 
     <p class="hint"><strong>Keyboard</strong> (overlay focused):</p>
     <ul class="hint kbd-list">
-      <li><kbd>Esc</kbd> &mdash; close overlay</li>
+      <li><kbd>Esc</kbd> &mdash; close and clear</li>
+      <li><kbd>H</kbd> / <kbd>L</kbd> &mdash; hide / lock</li>
       <li><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> &mdash; nudge 1px (<kbd>Shift</kbd> = 10px)</li>
       <li><kbd>Ctrl</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> &mdash; scale &plusmn;1% (<kbd>Shift</kbd> = 10%)</li>
     </ul>

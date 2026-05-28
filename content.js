@@ -4,24 +4,46 @@
 
   const DEFAULT_OPACITY = 0.5;
   const MIN_WIDTH = 20;
+  const SAVE_DEBOUNCE_MS = 300;
 
   let overlay = null;
   let active = false;
+  let currentDataUrl = null;
+  let saveTimer = null;
+
+  function pageKey() {
+    return 'overlay:' + location.origin + location.pathname;
+  }
+
+  function restoreFromStorage() {
+    chrome.storage.local.get([pageKey()], (data) => {
+      const state = data[pageKey()];
+      if (state && state.dataUrl) {
+        createOverlay(state.dataUrl, state);
+      }
+    });
+  }
 
   chrome.storage.local.get(['active'], (data) => {
     active = !!data.active;
+    if (active) restoreFromStorage();
   });
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.type === 'setActive') {
+      const wasActive = active;
       active = !!msg.active;
-      if (!active) removeOverlay();
+      if (!active) {
+        removeOverlay({ clearStorage: false });
+      } else if (!wasActive && !overlay) {
+        restoreFromStorage();
+      }
       sendResponse({ ok: true });
     } else if (msg.type === 'showImage') {
       createOverlay(msg.dataUrl);
       sendResponse({ ok: true });
     } else if (msg.type === 'clearOverlay') {
-      removeOverlay();
+      removeOverlay({ clearStorage: true });
       sendResponse({ ok: true });
     } else if (msg.type === 'ping') {
       sendResponse({ ok: true });
@@ -50,8 +72,31 @@
     true,
   );
 
-  function createOverlay(dataUrl) {
-    removeOverlay();
+  const ICON_HIDE =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+    '<path d="M3.53 2.47a.75.75 0 0 0-1.06 1.06l18 18a.75.75 0 1 0 1.06-1.06l-18-18ZM22.676 12.553a11.249 11.249 0 0 1-2.631 4.31l-3.099-3.099a5.25 5.25 0 0 0-6.71-6.71L7.759 4.577a11.217 11.217 0 0 1 4.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113Z"/>' +
+    '<path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A3.75 3.75 0 0 1 15.75 12ZM12.53 15.713l-4.243-4.244a3.75 3.75 0 0 0 4.244 4.243Z"/>' +
+    '<path d="M6.75 12c0-.619.107-1.213.304-1.764l-3.1-3.1a11.25 11.25 0 0 0-2.63 4.31c-.12.362-.12.752 0 1.114 1.489 4.467 5.704 7.69 10.675 7.69 1.5 0 2.933-.294 4.242-.827l-2.477-2.477A5.25 5.25 0 0 1 6.75 12Z"/>' +
+    '</svg>';
+  const ICON_LOCK =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+    '<path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 0 0-5.25 5.25v3a3 3 0 0 0-3 3v6.75a3 3 0 0 0 3 3h10.5a3 3 0 0 0 3-3v-6.75a3 3 0 0 0-3-3v-3c0-2.9-2.35-5.25-5.25-5.25Zm3.75 8.25v-3a3.75 3.75 0 1 0-7.5 0v3h7.5Z" clip-rule="evenodd"/>' +
+    '</svg>';
+
+  function makeToggleBtn(svg, ariaLabel, title) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pixeloverlay-toggle';
+    b.innerHTML = svg;
+    b.title = title;
+    b.setAttribute('aria-label', ariaLabel);
+    b.setAttribute('aria-pressed', 'false');
+    return b;
+  }
+
+  function createOverlay(dataUrl, state) {
+    removeOverlay({ clearStorage: false });
+    currentDataUrl = dataUrl;
 
     const wrapper = document.createElement('div');
     wrapper.className = 'pixeloverlay-wrapper';
@@ -60,7 +105,8 @@
     const img = document.createElement('img');
     img.className = 'pixeloverlay-image';
     img.draggable = false;
-    img.style.opacity = String(DEFAULT_OPACITY);
+    const initialOpacity = state && typeof state.opacity === 'number' ? state.opacity : DEFAULT_OPACITY;
+    img.style.opacity = String(initialOpacity);
 
     const handle = document.createElement('div');
     handle.className = 'pixeloverlay-handle';
@@ -68,6 +114,9 @@
 
     const controls = document.createElement('div');
     controls.className = 'pixeloverlay-controls';
+
+    const hideBtn = makeToggleBtn(ICON_HIDE, 'Hide overlay', 'Hide overlay (H)');
+    const lockBtn = makeToggleBtn(ICON_LOCK, 'Lock position', 'Lock position (L)');
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'pixeloverlay-close';
@@ -82,7 +131,7 @@
     opacitySlider.min = '0';
     opacitySlider.max = '100';
     opacitySlider.step = '1';
-    opacitySlider.value = String(Math.round(DEFAULT_OPACITY * 100));
+    opacitySlider.value = String(Math.round(initialOpacity * 100));
     opacitySlider.title = 'Opacity';
     opacitySlider.setAttribute('aria-label', 'Opacity');
 
@@ -106,6 +155,11 @@
 
     const topRow = document.createElement('div');
     topRow.className = 'pixeloverlay-controls-top';
+    const toggleGroup = document.createElement('div');
+    toggleGroup.className = 'pixeloverlay-toggle-group';
+    toggleGroup.appendChild(hideBtn);
+    toggleGroup.appendChild(lockBtn);
+    topRow.appendChild(toggleGroup);
     topRow.appendChild(closeBtn);
 
     const slidersRow = document.createElement('div');
@@ -124,8 +178,12 @@
     slidersRow.appendChild(opacityCol);
     slidersRow.appendChild(scaleCol);
 
+    const readout = document.createElement('div');
+    readout.className = 'pixeloverlay-readout';
+
     controls.appendChild(topRow);
     controls.appendChild(slidersRow);
+    controls.appendChild(readout);
 
     wrapper.appendChild(img);
     wrapper.appendChild(handle);
@@ -141,38 +199,114 @@
       scaleLabel.textContent = `${s.toFixed(2)}x`;
     }
 
+    function updateReadout() {
+      const left = Math.round(parseFloat(wrapper.style.left) || 0);
+      const top = Math.round(parseFloat(wrapper.style.top) || 0);
+      const w = Math.round(parseFloat(wrapper.style.width) || 0);
+      const h = Math.round(parseFloat(wrapper.style.height) || 0);
+      readout.textContent = `x: ${left}, y: ${top}\nw: ${w} × h: ${h}`;
+    }
+
+    function scheduleSave() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(doSave, SAVE_DEBOUNCE_MS);
+    }
+
+    function doSave() {
+      if (!overlay) return;
+      const data = {
+        dataUrl: currentDataUrl,
+        left: parseFloat(wrapper.style.left) || 0,
+        top: parseFloat(wrapper.style.top) || 0,
+        width: parseFloat(wrapper.style.width) || 0,
+        opacity: parseFloat(img.style.opacity) || DEFAULT_OPACITY,
+        locked: wrapper.classList.contains('pixeloverlay-locked'),
+        hidden: wrapper.classList.contains('pixeloverlay-hidden'),
+      };
+      chrome.storage.local.set({ [pageKey()]: data });
+    }
+
+    function onChange() {
+      syncScaleSlider();
+      updateReadout();
+      scheduleSave();
+    }
+
+    function applyToggleState(btn, on) {
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+
+    function setHide(on) {
+      wrapper.classList.toggle('pixeloverlay-hidden', on);
+      applyToggleState(hideBtn, on);
+      onChange();
+    }
+
+    function setLock(on) {
+      wrapper.classList.toggle('pixeloverlay-locked', on);
+      applyToggleState(lockBtn, on);
+      onChange();
+    }
+
     img.onload = () => {
       const ratio = img.naturalWidth / img.naturalHeight;
       wrapper.dataset.ratio = String(ratio);
-      const maxW = window.innerWidth * 0.8;
-      const maxH = window.innerHeight * 0.8;
-      let w = img.naturalWidth;
-      let h = img.naturalHeight;
-      if (w > maxW) {
-        w = maxW;
-        h = w / ratio;
+      if (state && state.width) {
+        wrapper.style.width = state.width + 'px';
+        wrapper.style.height = state.width / ratio + 'px';
+        wrapper.style.left = (state.left || 0) + 'px';
+        wrapper.style.top = (state.top || 0) + 'px';
+        if (state.locked) setLock(true);
+        if (state.hidden) setHide(true);
+      } else {
+        const maxW = window.innerWidth * 0.8;
+        const maxH = window.innerHeight * 0.8;
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
+        if (w > maxW) {
+          w = maxW;
+          h = w / ratio;
+        }
+        if (h > maxH) {
+          h = maxH;
+          w = h * ratio;
+        }
+        wrapper.style.width = w + 'px';
+        wrapper.style.height = h + 'px';
+        wrapper.style.left = Math.max(0, (window.innerWidth - w) / 2) + 'px';
+        wrapper.style.top = Math.max(0, (window.innerHeight - h) / 2) + 'px';
       }
-      if (h > maxH) {
-        h = maxH;
-        w = h * ratio;
-      }
-      wrapper.style.width = w + 'px';
-      wrapper.style.height = h + 'px';
-      wrapper.style.left = Math.max(0, (window.innerWidth - w) / 2) + 'px';
-      wrapper.style.top = Math.max(0, (window.innerHeight - h) / 2) + 'px';
       syncScaleSlider();
+      updateReadout();
+      scheduleSave();
     };
     img.src = dataUrl;
 
-    setupInteractions(wrapper, img, handle, syncScaleSlider);
+    setupInteractions(wrapper, img, handle, onChange);
 
     wrapper.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
         e.preventDefault();
-        removeOverlay();
+        removeOverlay({ clearStorage: true });
         return;
       }
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'h' || e.key === 'H') {
+          e.stopPropagation();
+          e.preventDefault();
+          setHide(!wrapper.classList.contains('pixeloverlay-hidden'));
+          return;
+        }
+        if (e.key === 'l' || e.key === 'L') {
+          e.stopPropagation();
+          e.preventDefault();
+          setLock(!wrapper.classList.contains('pixeloverlay-locked'));
+          return;
+        }
+      }
+      if (wrapper.classList.contains('pixeloverlay-locked')) return;
       if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
         e.stopPropagation();
         e.preventDefault();
@@ -183,7 +317,7 @@
         const newW = Math.max(MIN_WIDTH, w * factor);
         wrapper.style.width = newW + 'px';
         wrapper.style.height = newW / r + 'px';
-        syncScaleSlider();
+        onChange();
         return;
       }
       const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
@@ -196,6 +330,7 @@
         const top = parseFloat(wrapper.style.top) || 0;
         wrapper.style.left = left + delta[0] * step + 'px';
         wrapper.style.top = top + delta[1] * step + 'px';
+        onChange();
       }
     });
     wrapper.addEventListener('mousedown', () => wrapper.focus({ preventScroll: true }), true);
@@ -203,14 +338,27 @@
 
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      removeOverlay();
+      removeOverlay({ clearStorage: true });
     });
     closeBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    hideBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setHide(!wrapper.classList.contains('pixeloverlay-hidden'));
+    });
+    hideBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    lockBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setLock(!wrapper.classList.contains('pixeloverlay-locked'));
+    });
+    lockBtn.addEventListener('mousedown', (e) => e.stopPropagation());
 
     opacitySlider.addEventListener('input', () => {
       const v = Number(opacitySlider.value) / 100;
       img.style.opacity = String(v);
       opacityLabel.textContent = `${opacitySlider.value}%`;
+      scheduleSave();
     });
     opacitySlider.addEventListener('mousedown', (e) => e.stopPropagation());
     opacitySlider.addEventListener('touchstart', (e) => e.stopPropagation());
@@ -222,6 +370,8 @@
       wrapper.style.width = newW + 'px';
       wrapper.style.height = newW / r + 'px';
       scaleLabel.textContent = `${s.toFixed(2)}x`;
+      updateReadout();
+      scheduleSave();
     });
     scaleSlider.addEventListener('mousedown', (e) => e.stopPropagation());
     scaleSlider.addEventListener('touchstart', (e) => e.stopPropagation());
@@ -230,7 +380,7 @@
     controls.addEventListener('touchstart', (e) => e.stopPropagation());
   }
 
-  function setupInteractions(wrapper, img, handle, onResize) {
+  function setupInteractions(wrapper, img, handle, onChange) {
     let mode = null;
     let startX = 0;
     let startY = 0;
@@ -251,6 +401,7 @@
 
     function onDown(e, m) {
       if (e.button !== undefined && e.button !== 0) return;
+      if (wrapper.classList.contains('pixeloverlay-locked')) return;
       e.preventDefault();
       e.stopPropagation();
       const p = point(e);
@@ -280,8 +431,8 @@
         const newWidth = Math.max(MIN_WIDTH, startWidth + dx);
         wrapper.style.width = newWidth + 'px';
         wrapper.style.height = newWidth / r + 'px';
-        if (onResize) onResize();
       }
+      if (onChange) onChange();
     }
 
     function onUp() {
@@ -298,10 +449,16 @@
     handle.addEventListener('touchstart', (e) => onDown(e, 'resize'), { passive: false });
   }
 
-  function removeOverlay() {
+  function removeOverlay(opts) {
+    const clearStorage = !opts || opts.clearStorage !== false;
     if (overlay && overlay.parentNode) {
       overlay.parentNode.removeChild(overlay);
     }
     overlay = null;
+    currentDataUrl = null;
+    clearTimeout(saveTimer);
+    if (clearStorage) {
+      chrome.storage.local.remove(pageKey());
+    }
   }
 })();
