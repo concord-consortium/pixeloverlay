@@ -119,4 +119,14 @@ large pasted images on many different URLs could eventually hit the limit.
 
 ## Icons
 
-Icons use [Heroicons](https://heroicons.com) `square-2-stack` (MIT license).
+The toolbar icon is a custom SVG ([icons/icon.svg](icons/icon.svg)) — a translucent gray
+rectangle with a red dashed vertical and horizontal guide line. PNGs at 16/48/128 are
+rendered from it.
+
+In-UI icons use [Heroicons](https://heroicons.com) (MIT license):
+
+- `eye-slash` — overlay hide toggle / popup hide-all-lines
+- `lock-closed` — overlay lock toggle
+- `view-columns` / `bars-3` — popup add vertical / horizontal line
+- `trash` — popup remove-all lines
+- `arrow-uturn-left` / `arrow-uturn-right` — popup undo / redo

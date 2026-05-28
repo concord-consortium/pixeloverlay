@@ -5,8 +5,25 @@ body {
   padding: 12px;
   color: #222;
   background: #ffffff;
+  box-sizing: border-box;
+}
+
+html {
+  margin: 0;
+  background: #ffffff;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   border: 1px solid #c8c8c8;
   box-sizing: border-box;
+  pointer-events: none;
+  z-index: 9999;
 }
 
 h1 {
@@ -20,6 +37,10 @@ h1 {
   align-items: center;
   gap: 8px;
   margin: 8px 0;
+}
+
+body > *:first-child {
+  margin-top: 0;
 }
 
 .label {
