@@ -3,6 +3,8 @@
   "name": "PixelOverlay",
   "version": "1.0.0",
   "description": "Paste a clipboard image as a translucent, movable, scalable overlay for pixel-perfect design comparison.",
+  "author": "Doug Martin <dmartin@concord.org>",
+  "homepage_url": "https://github.com/concord-consortium/pixeloverlay",
   "permissions": ["activeTab", "storage", "clipboardRead", "scripting"],
   "host_permissions": ["<all_urls>"],
   "action": {
